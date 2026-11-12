@@ -65,7 +65,8 @@ class PaintApp:
         tool_defs = [
             ("Pencil", "pencil"), ("Brush", "brush"), ("Eraser", "eraser"),
             ("Line", "line"), ("Rectangle", "rect"), ("Ellipse", "ellipse"),
-            ("Star", "star"), ("Fill", "fill"), ("Picker", "picker"),
+            ("Star", "star"), ("Octagon", "octagon"), ("Diamond", "diamond"),
+            ("Fill", "fill"), ("Picker", "picker"),
         ]
         for i, (label, name) in enumerate(tool_defs):
             b = tk.Button(tools, text=label, width=8,
@@ -73,10 +74,10 @@ class PaintApp:
             b.grid(row=i // 2, column=i % 2, padx=2, pady=2)
             self.tool_buttons[name] = b
 
-        tk.Label(tools, text="Size").grid(row=5, column=0, columnspan=2, pady=(10, 0))
+        tk.Label(tools, text="Size").grid(row=6, column=0, columnspan=2, pady=(10, 0))
         self.size_var = tk.IntVar(value=self.size)
         tk.Scale(tools, from_=1, to=40, orient=tk.HORIZONTAL, variable=self.size_var,
-                 length=110).grid(row=6, column=0, columnspan=2)
+                 length=110).grid(row=7, column=0, columnspan=2)
 
         # Center: canvas
         canvas_frame = tk.Frame(body, bd=2, relief=tk.SUNKEN)
@@ -181,7 +182,7 @@ class PaintApp:
 
         if self.tool in ("pencil", "brush", "eraser"):
             self._stroke_to(x, y)
-        elif self.tool in ("line", "rect", "ellipse", "star"):
+        elif self.tool in ("line", "rect", "ellipse", "star", "octagon", "diamond"):
             # live preview as a temporary canvas item
             if self.temp_item:
                 self.canvas.delete(self.temp_item)
@@ -193,8 +194,8 @@ class PaintApp:
             elif self.tool == "rect":
                 self.temp_item = self.canvas.create_rectangle(x0, y0, x, y,
                                                               outline=self.color, width=w)
-            elif self.tool == "star":
-                pts = self._star_points(x0, y0, x, y)
+            elif self.tool in ("star", "octagon", "diamond"):
+                pts = self._poly_points(self.tool, x0, y0, x, y)
                 self.temp_item = self.canvas.create_polygon(
                     pts, outline=self.color, fill="", width=w)
             else:
@@ -219,8 +220,8 @@ class PaintApp:
                 self.draw.rectangle(box, outline=rgb, width=w)
             else:
                 self.draw.ellipse(box, outline=rgb, width=w)
-        elif self.tool == "star":
-            pts = self._star_points(x0, y0, x, y)
+        elif self.tool in ("star", "octagon", "diamond"):
+            pts = self._poly_points(self.tool, x0, y0, x, y)
             # closed outline; joint='curve' keeps thick corners clean
             self.draw.line(pts + pts[:2], fill=rgb, width=w, joint="curve")
             if w > 2:
@@ -294,17 +295,28 @@ class PaintApp:
         self.draw.ellipse([x - r, y - r, x + r, y + r], fill=rgb)
 
     @staticmethod
-    def _star_points(x0, y0, x1, y1):
-        """Flat [x, y, ...] list for a 5-pointed star fit to the drag box."""
+    def _poly_points(shape, x0, y0, x1, y1):
+        """Flat [x, y, ...] vertex list for a shape fit to the drag box."""
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
         rx, ry = abs(x1 - x0) / 2, abs(y1 - y0) / 2
-        inner = 0.382  # classic pentagram inner/outer radius ratio
-        pts = []
-        for i in range(10):
-            ang = -math.pi / 2 + i * math.pi / 5  # top point up
-            f = 1.0 if i % 2 == 0 else inner
-            pts += [cx + f * rx * math.cos(ang), cy + f * ry * math.sin(ang)]
-        return pts
+        if shape == "star":
+            inner = 0.382  # classic pentagram inner/outer radius ratio
+            pts = []
+            for i in range(10):
+                ang = -math.pi / 2 + i * math.pi / 5  # top point up
+                f = 1.0 if i % 2 == 0 else inner
+                pts += [cx + f * rx * math.cos(ang), cy + f * ry * math.sin(ang)]
+            return pts
+        if shape == "diamond":
+            return [cx, cy - ry, cx + rx, cy, cx, cy + ry, cx - rx, cy]
+        # octagon: rectangle with corners cut so sides are equal when square
+        k = 1 / (2 + math.sqrt(2))
+        ox, oy = 2 * rx * k, 2 * ry * k
+        left, right = cx - rx, cx + rx
+        top, bot = cy - ry, cy + ry
+        return [left + ox, top, right - ox, top, right, top + oy,
+                right, bot - oy, right - ox, bot, left + ox, bot,
+                left, bot - oy, left, top + oy]
 
     @staticmethod
     def _hex_to_rgb(h):
