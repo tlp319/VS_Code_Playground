@@ -1,0 +1,4 @@
+# PyInstaller build artifacts (dist/MyPaint.exe is kept on purpose)
+build/
+__pycache__/
+*.pyc
