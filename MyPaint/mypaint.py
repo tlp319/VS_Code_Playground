@@ -65,7 +65,7 @@ class PaintApp:
         tool_defs = [
             ("Pencil", "pencil"), ("Brush", "brush"), ("Eraser", "eraser"),
             ("Line", "line"), ("Rectangle", "rect"), ("Ellipse", "ellipse"),
-            ("Fill", "fill"), ("Picker", "picker"),
+            ("Star", "star"), ("Fill", "fill"), ("Picker", "picker"),
         ]
         for i, (label, name) in enumerate(tool_defs):
             b = tk.Button(tools, text=label, width=8,
@@ -73,10 +73,10 @@ class PaintApp:
             b.grid(row=i // 2, column=i % 2, padx=2, pady=2)
             self.tool_buttons[name] = b
 
-        tk.Label(tools, text="Size").grid(row=4, column=0, columnspan=2, pady=(10, 0))
+        tk.Label(tools, text="Size").grid(row=5, column=0, columnspan=2, pady=(10, 0))
         self.size_var = tk.IntVar(value=self.size)
         tk.Scale(tools, from_=1, to=40, orient=tk.HORIZONTAL, variable=self.size_var,
-                 length=110).grid(row=5, column=0, columnspan=2)
+                 length=110).grid(row=6, column=0, columnspan=2)
 
         # Center: canvas
         canvas_frame = tk.Frame(body, bd=2, relief=tk.SUNKEN)
@@ -181,7 +181,7 @@ class PaintApp:
 
         if self.tool in ("pencil", "brush", "eraser"):
             self._stroke_to(x, y)
-        elif self.tool in ("line", "rect", "ellipse"):
+        elif self.tool in ("line", "rect", "ellipse", "star"):
             # live preview as a temporary canvas item
             if self.temp_item:
                 self.canvas.delete(self.temp_item)
@@ -193,6 +193,10 @@ class PaintApp:
             elif self.tool == "rect":
                 self.temp_item = self.canvas.create_rectangle(x0, y0, x, y,
                                                               outline=self.color, width=w)
+            elif self.tool == "star":
+                pts = self._star_points(x0, y0, x, y)
+                self.temp_item = self.canvas.create_polygon(
+                    pts, outline=self.color, fill="", width=w)
             else:
                 self.temp_item = self.canvas.create_oval(x0, y0, x, y,
                                                          outline=self.color, width=w)
@@ -215,6 +219,12 @@ class PaintApp:
                 self.draw.rectangle(box, outline=rgb, width=w)
             else:
                 self.draw.ellipse(box, outline=rgb, width=w)
+        elif self.tool == "star":
+            pts = self._star_points(x0, y0, x, y)
+            # closed outline; joint='curve' keeps thick corners clean
+            self.draw.line(pts + pts[:2], fill=rgb, width=w, joint="curve")
+            if w > 2:
+                self._cap_round(pts[0], pts[1], w, rgb)
 
         self.start = None
         self.last = None
@@ -282,6 +292,19 @@ class PaintApp:
     def _cap_round(self, x, y, w, rgb):
         r = w / 2
         self.draw.ellipse([x - r, y - r, x + r, y + r], fill=rgb)
+
+    @staticmethod
+    def _star_points(x0, y0, x1, y1):
+        """Flat [x, y, ...] list for a 5-pointed star fit to the drag box."""
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        rx, ry = abs(x1 - x0) / 2, abs(y1 - y0) / 2
+        inner = 0.382  # classic pentagram inner/outer radius ratio
+        pts = []
+        for i in range(10):
+            ang = -math.pi / 2 + i * math.pi / 5  # top point up
+            f = 1.0 if i % 2 == 0 else inner
+            pts += [cx + f * rx * math.cos(ang), cy + f * ry * math.sin(ang)]
+        return pts
 
     @staticmethod
     def _hex_to_rgb(h):
